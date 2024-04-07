@@ -52,7 +52,77 @@ final class ProductFixture implements Fixture
 
 ### Loading Fixtures
 
-Todo
+To use fixtures in tests, a few preparations must be made.
+
+Currently, the FixtureFactory still has to be instantiated manually. The easiest way to do this is with a project-specific kernel base class.
+
+```php
+// pimcore/tests/Functional/Foundation/BaseKernelTestCase.php
+<?php declare(strict_types=1);
+
+namespace Tests\Functional\Foundation;
+
+use Neusta\Pimcore\FixtureBundle\Factory\FixtureFactory;
+use Neusta\Pimcore\FixtureBundle\Factory\FixtureInstantiator\FixtureInstantiatorForAll;
+use Neusta\Pimcore\FixtureBundle\Factory\FixtureInstantiator\FixtureInstantiatorForParametrizedConstructors;
+use Neusta\Pimcore\FixtureBundle\Fixture;
+use Pimcore\Test\KernelTestCase;
+
+class BaseKernelTestCase extends KernelTestCase
+{
+    /** @param list<class-string<Fixture>> $fixtures */
+    protected function importFixtures(array $fixtures): void
+    {
+        $instantiators = [
+            new FixtureInstantiatorForParametrizedConstructors(static::getContainer()),
+            new FixtureInstantiatorForAll(),
+        ];
+
+        (new FixtureFactory([], $instantiators))->createFixtures($fixtures);
+    }
+
+    protected function setUp(): void
+    {
+        static::bootKernel();
+    }
+
+    protected function tearDown(): void
+    {
+        \Pimcore\Cache::clearAll();
+        \Pimcore::collectGarbage();
+
+        parent::tearDown();
+    }
+}
+```
+
+Use the base class as follows. For depending fixtures, use the public properties (not in the example).
+
+```php
+// pimcore/tests/Functional/MyCustomTest.php
+<?php declare(strict_types=1);
+
+namespace Tests\Functional;
+
+use Pimcore\Model\DataObject;
+use Tests\Fixtures\ProductFixture;
+use Tests\Functional\Foundation\BaseKernelTestCase;
+
+class MyCustomTest extends BaseKernelTestCase
+{
+    /** @test */
+    public function test_must_import_fixtures(): void
+    {
+        $this->importFixtures([
+            ProductFixture::class,
+        ]);
+        
+        $productFixture = DataObject::getByPath('/product-1');
+        
+        self::assertNotNull($productFixture);
+    }
+}
+```
 
 ### Accessing Services from the Fixtures
 
