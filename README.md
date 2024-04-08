@@ -43,7 +43,7 @@ final class ProductFixture implements Fixture
             $product->setPublished(true);
             $product->setKey("Product {$i}");
             // ...
-            
+
             $product->save();
         }
     }
@@ -54,40 +54,34 @@ final class ProductFixture implements Fixture
 
 To use fixtures in tests, a few preparations must be made.
 
-Currently, the FixtureFactory still has to be instantiated manually. The easiest way to do this is with a project-specific kernel base class.
+Currently, the `FixtureFactory` still has to be instantiated manually.
+The easiest way to do this is with a project-specific kernel base class.
 
 ```php
-// pimcore/tests/Functional/Foundation/BaseKernelTestCase.php
-<?php declare(strict_types=1);
-
-namespace Tests\Functional\Foundation;
-
 use Neusta\Pimcore\FixtureBundle\Factory\FixtureFactory;
 use Neusta\Pimcore\FixtureBundle\Factory\FixtureInstantiator\FixtureInstantiatorForAll;
 use Neusta\Pimcore\FixtureBundle\Factory\FixtureInstantiator\FixtureInstantiatorForParametrizedConstructors;
 use Neusta\Pimcore\FixtureBundle\Fixture;
 use Pimcore\Test\KernelTestCase;
 
-class BaseKernelTestCase extends KernelTestCase
+abstract class BaseKernelTestCase extends KernelTestCase
 {
+    protected FixtureFactory $fixtureFactory;
+
     /** @param list<class-string<Fixture>> $fixtures */
     protected function importFixtures(array $fixtures): void
     {
-        $instantiators = [
+        $this->fixtureFactory ??= (new FixtureFactory([
             new FixtureInstantiatorForParametrizedConstructors(static::getContainer()),
             new FixtureInstantiatorForAll(),
-        ];
+        ]));
 
-        (new FixtureFactory([], $instantiators))->createFixtures($fixtures);
-    }
-
-    protected function setUp(): void
-    {
-        static::bootKernel();
+        $this->fixtureFactory->createFixtures($fixtures);
     }
 
     protected function tearDown(): void
     {
+        unset($this->fixtureFactory);
         \Pimcore\Cache::clearAll();
         \Pimcore::collectGarbage();
 
@@ -96,29 +90,22 @@ class BaseKernelTestCase extends KernelTestCase
 }
 ```
 
-Use the base class as follows. For depending fixtures, use the public properties (not in the example).
+Use the base class as follows:
 
 ```php
-// pimcore/tests/Functional/MyCustomTest.php
-<?php declare(strict_types=1);
-
-namespace Tests\Functional;
-
 use Pimcore\Model\DataObject;
-use Tests\Fixtures\ProductFixture;
-use Tests\Functional\Foundation\BaseKernelTestCase;
 
-class MyCustomTest extends BaseKernelTestCase
+final class MyCustomTest extends BaseKernelTestCase
 {
     /** @test */
-    public function test_must_import_fixtures(): void
+    public function import_fixtures(): void
     {
         $this->importFixtures([
             ProductFixture::class,
         ]);
-        
+
         $productFixture = DataObject::getByPath('/product-1');
-        
+
         self::assertNotNull($productFixture);
     }
 }
@@ -176,6 +163,51 @@ final class OtherFixture implements Fixture
     public function create(): void
     {
         $this->someInformation = 'some information created in this fixture';
+    }
+}
+```
+
+The state can also be accessed from the tests:
+
+```php
+use Neusta\Pimcore\FixtureBundle\Fixture;
+use Pimcore\Model\DataObject\Product;
+
+final class ProductFixture implements Fixture
+{
+    public int $productId;
+
+    public function create(): void
+    {
+        $product = new Product();
+        $product->setParentId(0);
+        $product->setPublished(true);
+        $product->setKey("Product Fixture");
+        // ...
+
+        $product->save();
+
+        $this->productId = $product->getId();
+    }
+}
+```
+
+```php
+use Pimcore\Model\DataObject;
+
+final class MyCustomTest extends BaseKernelTestCase
+{
+    /** @test */
+    public function some_product_test(): void
+    {
+        $this->importFixtures([
+            ProductFixture::class,
+        ]);
+
+        $productFixture = $this->fixtureFactory->getFixture(ProductFixture::class);
+        $product = DataObject::getById($productFixture->productId);
+
+        self::assertNotNull($product);
     }
 }
 ```
