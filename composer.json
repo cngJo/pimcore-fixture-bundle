@@ -3,6 +3,7 @@
   "description": "Provide basic functionality to enable installing fixtures in Pimcore",
   "license": "GPL-3.0-or-later",
   "type": "pimcore-bundle",
+  "version": "2.1.0",
   "authors": [
     {
       "name": "team neusta GmbH",
